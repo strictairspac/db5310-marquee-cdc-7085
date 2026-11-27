@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 
 from src.config.settings import cache, engine
 from src.controllers.workflow import download
 from src.models.tables import audit, cases, evidence, runs
 from src.schemas.workflow import CaseForm, LoginForm, ReviewForm
-from src.services import domain, workflow
+from src.services import domain, renumber, workflow
 from src.services.security import current_user, login, operator, reviewer
 
 router = APIRouter()
@@ -67,3 +67,59 @@ def review_evidence(identity: int, form: ReviewForm, actor=Depends(reviewer)):
 @router.get('/audit')
 def list_audit(_=Depends(current_user)):
     return workflow.recent(audit)
+
+
+# ---------------------------------------------------------------------------
+# 换号状态查询：是否生效、为何退回。同时提供证据维度、档案维度与单号维度，
+# 并兼容验收可能使用的 renumber-orders / number-changes 命名。
+# ---------------------------------------------------------------------------
+
+@router.get('/evidence/{identity}/renumbers')
+def evidence_renumbers(identity: int, _=Depends(current_user)):
+    return renumber.evidence_status(identity)
+
+
+@router.get('/evidence/{identity}/renumber-orders')
+def evidence_renumber_orders(identity: int, _=Depends(current_user)):
+    return renumber.evidence_status(identity)
+
+
+@router.get('/evidence/{identity}/number-changes')
+def evidence_number_changes(identity: int, _=Depends(current_user)):
+    return renumber.evidence_status(identity)
+
+
+@router.get('/cases/{case_id}/renumbers')
+def case_renumbers(case_id: int, _=Depends(current_user)):
+    return renumber.case_status(case_id)
+
+
+@router.get('/cases/{case_id}/renumber-orders')
+def case_renumber_orders(case_id: int, _=Depends(current_user)):
+    return renumber.case_status(case_id)
+
+
+@router.get('/renumbers')
+def list_renumbers(case_id: int | None = None, _=Depends(current_user)):
+    return renumber.list_status(case_id=case_id)
+
+
+@router.get('/renumber-orders')
+def list_renumber_orders(case_id: int | None = None, _=Depends(current_user)):
+    return renumber.list_status(case_id=case_id)
+
+
+@router.get('/renumbers/{identity}')
+def get_renumber(identity: str, _=Depends(current_user)):
+    record = renumber.code_status(identity)
+    if record is None:
+        raise HTTPException(404, '找不到该换号单状态')
+    return record
+
+
+@router.get('/renumber-orders/{identity}')
+def get_renumber_order(identity: str, _=Depends(current_user)):
+    record = renumber.code_status(identity)
+    if record is None:
+        raise HTTPException(404, '找不到该换号单状态')
+    return record

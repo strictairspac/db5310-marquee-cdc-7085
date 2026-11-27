@@ -6,7 +6,7 @@ from sqlalchemy import and_, or_, select
 
 from src.config.settings import cache, engine
 from src.constants.workflow import Status
-from src.models.tables import audit, cases, evidence, runs
+from src.models.tables import audit, cases, evidence, renumber_orders, runs
 from src.services import domain
 from src.utils.encoding import canonical
 from src.utils.time import utc_time
@@ -85,9 +85,32 @@ def finish(run_id, token, result=None, error=None):
                         .values(status=status, finished_at=utc_time(), error=error)).rowcount
         if not count:
             return
+        evidence_id = None
         if result is not None:
-            conn.execute(evidence.insert().values(run_id=run_id, report=result, digest=digest))
+            evidence_id = conn.execute(evidence.insert().values(run_id=run_id, report=result, digest=digest)).inserted_primary_key[0]
+            _persist_renumber_status(conn, run_id, evidence_id, result)
         log(conn, 'worker', status.value, run_id)
+
+
+def _persist_renumber_status(conn, run_id, evidence_id, result):
+    """把报告里的换号单状态落到持久表，供“是否生效/为何退回”查询。"""
+    orders = (result or {}).get('renumber_orders') or (result or {}).get('renumbers')
+    if not orders:
+        return
+    case_id = conn.execute(select(runs.c.case_id).where(runs.c.id == run_id)).scalar_one()
+    now = utc_time()
+    for order in orders:
+        if not isinstance(order, dict) or not order.get('renumber_id'):
+            continue
+        state = order.get('state') or order.get('status') or 'pending'
+        if state not in ('pending', 'effective', 'rejected'):
+            state = {'已生效': 'effective', '已退回': 'rejected', '待生效': 'pending'}.get(state, 'pending')
+        conn.execute(renumber_orders.insert().values(
+            case_id=case_id, run_id=run_id, evidence_id=evidence_id,
+            renumber_id=str(order['renumber_id'])[:64],
+            stream=str(order.get('stream', ''))[:64],
+            gate_seq=int(order.get('sequence') or order.get('gate_seq') or 0),
+            status=state, reason=str(order.get('reason', ''))[:500], created_at=now))
 
 
 def review(identity, note, actor):

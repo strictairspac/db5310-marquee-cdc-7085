@@ -12,3 +12,12 @@ class Status(StrEnum):
     RUNNING = 'running'
     COMPLETE = 'complete'
     FAILED = 'failed'
+
+
+class RenumberStatus(StrEnum):
+    PENDING = 'pending'
+    EFFECTIVE = 'effective'
+    SWITCHED = 'effective'
+    APPLIED = 'effective'
+    REJECTED = 'rejected'
+    BLOCKED = 'rejected'

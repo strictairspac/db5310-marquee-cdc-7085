@@ -1,4 +1,4 @@
-from sqlalchemy import (JSON, Column, ForeignKey, Integer, MetaData, String,
+from sqlalchemy import (JSON, BigInteger, Column, ForeignKey, Integer, MetaData, String,
                         Table, Text)
 
 schema = MetaData()
@@ -37,4 +37,15 @@ audit = Table('audit_events', schema,
     Column('actor', String(40), nullable=False),
     Column('action', String(32), nullable=False),
     Column('reference', String(50), nullable=False),
+    Column('created_at', String(32), nullable=False))
+renumber_orders = Table('business_renumber_orders', schema,
+    Column('id', Integer, primary_key=True),
+    Column('case_id', Integer, ForeignKey('business_cases.id'), nullable=False, index=True),
+    Column('run_id', Integer, ForeignKey('business_runs.id'), nullable=False, index=True),
+    Column('evidence_id', Integer, ForeignKey('business_evidence.id')),
+    Column('renumber_id', String(64), nullable=False, index=True),
+    Column('stream', String(64), nullable=False),
+    Column('gate_seq', BigInteger, nullable=False),
+    Column('status', String(20), nullable=False, index=True),
+    Column('reason', String(500), nullable=False, server_default=''),
     Column('created_at', String(32), nullable=False))
